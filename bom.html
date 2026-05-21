@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Çevrimiçi Geleneksel BOM Oyunu</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #fce4ec;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { color: #880e4f; margin-bottom: 5px; text-align: center; font-weight: 900;}
+        
+        .panel {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(136, 14, 79, 0.15);
+            text-align: center;
+            width: 100%;
+            max-width: 550px;
+            margin-top: 20px;
+            border: 2px solid #f8bbd0;
+        }
+        
+        input[type="text"] {
+            width: 85%;
+            padding: 12px;
+            margin: 10px 0;
+            font-size: 1.1rem;
+            border-radius: 8px;
+            border: 2px solid #f48fb1;
+            outline: none;
+            text-align: center;
+            font-weight: bold;
+            color: #880e4f;
+        }
+        input[type="text"]:focus { border-color: #c2185b; }
+        
+        button {
+            background-color: #d81b60;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-size: 1.2rem;
+            width: 90%;
+            transition: 0.2s;
+            margin-top: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        button:hover { background-color: #880e4f; transform: translateY(-2px); }
+        button:disabled { background-color: #e0e0e0; color: #9e9e9e; cursor: not-allowed; transform: none; box-shadow: none;}
+
+        .btn-bom { background-color: #ff3d00; border: 2px solid #e65100; font-size: 1.4rem; }
+        .btn-bom:hover { background-color: #dd2c00; }
+        
+        .btn-number { background-color: #1e88e5; border: 2px solid #1565c0;}
+        .btn-number:hover { background-color: #0d47a1; }
+
+        #game-screen, #gameover-screen { display: none; }
+        
+        /* Sayı ve Rapor Ekranı */
+        .number-display {
+            font-size: 5rem;
+            font-weight: 900;
+            color: #333;
+            background: #f5f5f5;
+            border-radius: 20px;
+            margin: 20px auto;
+            width: 150px;
+            height: 150px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 5px solid #d81b60;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        .timer-box {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #fff;
+            background: #d32f2f;
+            padding: 5px 20px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+
+        #turn-status { font-size: 1.4rem; font-weight: bold; margin: 10px 0; color: #c2185b; }
+        .report-text { font-size: 1.1rem; font-weight: bold; color: #e65100; min-height: 25px; margin-bottom: 15px;}
+
+        /* Oyuncu Listesi */
+        .player-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .player-card {
+            background: #fff;
+            border: 2px solid #f48fb1;
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: #880e4f;
+            min-width: 90px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .player-card.active-turn { 
+            background: #d81b60; 
+            color: white; 
+            transform: scale(1.1); 
+            border-color: #880e4f;
+            box-shadow: 0 4px 10px rgba(216, 27, 96, 0.4);
+        }
+        .player-card.eliminated { 
+            opacity: 0.4; 
+            text-decoration: line-through; 
+            background: #eee; 
+            border-color: #ccc; 
+            color: #777;
+        }
+        .heart { color: #ff1744; }
+        .action-buttons { display: flex; gap: 10px; justify-content: center; }
+        .action-buttons button { width: 45%; }
+    </style>
+</head>
+<body>
+
+    <h1>1-2-3-4 BOM!</h1>
+
+    <div id="login-screen" class="panel">
+        <h3 style="color: #c2185b;">Oyuna Katıl</h3>
+        <input type="text" id="username-input" placeholder="Adınızı girin..." maxlength="12">
+        <input type="text" id="room-input" placeholder="Oda Kodu (Örn: 555)..." maxlength="6">
+        <button onclick="joinRoom()">Çembere Katıl</button>
+        <p style="font-size: 0.85rem; color: #666; margin-top: 15px;">Aynı oda koduyla sınırsız arkadaşınız katılabilir. Kapanan odalar otomatik temizlenir.</p>
+    </div>
+
+    <div id="waiting-screen" class="panel" style="display:none;">
+        <h3 id="waiting-text" style="color: #c2185b;">Oyuncular Bekleniyor...</h3>
+        <div class="player-grid" id="waiting-players"></div>
+        <button id="start-btn" style="display:none; background-color: #4caf50;" onclick="startRound()">Oyunu Başlat</button>
+        <p style="font-size: 0.8rem; color: #880e4f; margin-top: 10px;">Odayı kuran kişi başlattığı an çemberdeki sıralama belirlenir.</p>
+    </div>
+
+    <div id="game-screen" class="panel">
+        <div class="timer-box" id="timer">10</div>
+        
+        <div class="player-grid" id="ingame-players"></div>
+
+        <div id="turn-status">Yükleniyor...</div>
+        <div class="report-text" id="report-view">Oyun başlıyor, odaklanın!</div>
+
+        <span style="font-size: 0.9rem; font-weight: bold; color: #777;">MASADAKİ SAYI</span>
+        <div class="number-display" id="number-view">1</div>
+
+        <div class="action-buttons" id="action-area">
+            <button class="btn-number" id="btn-number" onclick="submitChoice('NUMBER')">SAYIYI SÖYLE</button>
+            <button class="btn-bom" id="btn-bom" onclick="submitChoice('BOM')">💥 BOM!</button>
+        </div>
+
+        <p style="font-size: 0.8rem; color: #777; margin-top: 20px;"><b>Kural:</b> Sayı 5'in katıysa veya içinde 5 varsa <b>BOM</b> demelisin! Zincir asla kopmaz; doğru bilsen de hata yapsan da sayı artarak devam eder!</p>
+    </div>
+
+    <div id="gameover-screen" class="panel">
+        <h2 style="color: #c2185b;">Oyun Bitti!</h2>
+        <h3 id="winner-text" style="color: #880e4f; font-size: 1.6rem;"></h3>
+        <div class="player-grid" id="final-scores" style="margin-top: 20px;"></div>
+        <button style="background-color: #d32f2f;" onclick="resetWholeGame()">Yepyeni Çember Kur (Rövanş)</button>
+    </div>
+
+    <script>
+        // --- FIREBASE YAPILANDIRMASI ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyBqYTVJcdJQb83qCWpkjFd2H2J3f8UYtXs",
+          authDomain: "dijital-mangala-fc434.firebaseapp.com",
+          databaseURL: "https://dijital-mangala-fc434-default-rtdb.firebaseio.com",
+          projectId: "dijital-mangala-fc434",
+          storageBucket: "dijital-mangala-fc434.firebasestorage.app",
+          messagingSenderId: "901348106095",
+          appId: "1:901348106095:web:1dd4bba92b52493f71929a"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        let roomRef;
+        let myName = "";
+        let roomCode = "";
+        let timerInterval = null;
+
+        let gameState = {
+            status: "waiting", 
+            host: "",
+            players: {}, 
+            turnOrder: [],
+            currentTurnIndex: 0,
+            currentNumber: 1,
+            lastReport: "",
+            endTime: 0,
+            winnerText: ""
+        };
+
+        function checkIsBom(num) {
+            return (num % 5 === 0 || num.toString().includes('5'));
+        }
+
+        function joinRoom() {
+            let rawName = document.getElementById('username-input').value.trim();
+            roomCode = document.getElementById('room-input').value.trim();
+
+            if (!rawName || !roomCode) { alert("Lütfen adınızı ve oda kodunu girin!"); return; }
+
+            roomRef = database.ref('bommulti/' + roomCode);
+
+            roomRef.once('value', snapshot => {
+                let data = snapshot.val();
+                let now = Date.now();
+                let isZombied = false;
+                
+                // GÜNCELLEME: Oda kilitlenmesini çözen Zombi Koruma Motoru
+                if (data && data.status === "playing" && data.endTime && (now > data.endTime + 8000)) {
+                    isZombied = true;
+                }
+
+                if (!data || data.status === "gameover" || isZombied || !data.players) {
+                    myName = rawName;
+                    let freshState = {
+                        status: "waiting",
+                        host: myName,
+                        players: {},
+                        turnOrder: [],
+                        currentTurnIndex: 0,
+                        currentNumber: 1,
+                        lastReport: "Çember kuruldu!",
+                        endTime: 0,
+                        winnerText: ""
+                    };
+                    freshState.players[myName] = { lives: 3, score: 0 };
+                    
+                    roomRef.set(freshState).then(() => {
+                        document.getElementById('login-screen').style.display = 'none';
+                        roomRef.child('players').child(myName).onDisconnect().remove();
+                        listenToRoom();
+                    });
+                } 
+                else if (data.status === "waiting") {
+                    myName = rawName;
+                    // Aynı isimle giren olursa çakışmayı önle
+                    if (data.players && data.players[myName]) {
+                        myName = myName + Math.floor(Math.random() * 100);
+                    }
+                    roomRef.child('players').child(myName).set({ lives: 3, score: 0 }).then(() => {
+                        document.getElementById('login-screen').style.display = 'none';
+                        roomRef.child('players').child(myName).onDisconnect().remove();
+                        listenToRoom();
+                    });
+                } 
+                else {
+                    alert("Oyun şu an yarış ortasında! Lütfen saniyelerin bitmesini bekleyin.");
+                    return;
+                }
+            });
+        }
+
+        function listenToRoom() {
+            roomRef.on('value', snapshot => {
+                let data = snapshot.val();
+                if (!data) return;
+                
+                // Host Düşerse Lideri Değiştir
+                if (data.players) {
+                    let pNames = Object.keys(data.players);
+                    if (pNames.length > 0 && (!data.host || !data.players[data.host])) {
+                        if (myName === pNames[0]) roomRef.update({ host: myName });
+                    }
+                }
+
+                gameState = data;
+                updateUI();
+            });
+        }
+
+        function updateUI() {
+            if (!gameState.players) return;
+
+            let actualHost = gameState.host;
+            let pNames = Object.keys(gameState.players);
+
+            if (gameState.status === "waiting") {
+                document.getElementById('waiting-screen').style.display = 'block';
+                document.getElementById('game-screen').style.display = 'none';
+                document.getElementById('gameover-screen').style.display = 'none';
+                
+                let pList = document.getElementById('waiting-players');
+                pList.innerHTML = "";
+                pNames.forEach(p => {
+                    pList.innerHTML += `<div class="player-card">${p} ${p === actualHost ? '👑' : ''}</div>`;
+                });
+
+                if (myName === actualHost && pNames.length > 1) {
+                    document.getElementById('start-btn').style.display = 'inline-block';
+                } else {
+                    document.getElementById('start-btn').style.display = 'none';
+                }
+            } 
+            else if (gameState.status === "playing") {
+                document.getElementById('waiting-screen').style.display = 'none';
+                document.getElementById('game-screen').style.display = 'block';
+
+                let activePlayer = gameState.turnOrder[gameState.currentTurnIndex];
+
+                let pGrid = document.getElementById('ingame-players');
+                pGrid.innerHTML = "";
+                gameState.turnOrder.forEach(p => {
+                    let pData = gameState.players[p];
+                    if (!pData) return;
+                    let hearts = "❤".repeat(pData.lives) + "🖤".repeat(3 - pData.lives);
+                    let classStr = "player-card";
+                    if (pData.lives <= 0) classStr += " eliminated";
+                    else if (p === activePlayer) classStr += " active-turn";
+
+                    pGrid.innerHTML += `<div class="${classStr}">${p}<br><span class="heart">${hearts}</span><br><span style="font-size:0.8rem">${pData.score} Puan</span></div>`;
+                });
+
+                document.getElementById('number-view').innerText = gameState.currentNumber;
+                document.getElementById('report-view').innerText = gameState.lastReport;
+                document.getElementById('btn-number').innerText = `SAYIYI SÖYLE (${gameState.currentNumber})`;
+
+                let btnNum = document.getElementById('btn-number');
+                let btnBom = document.getElementById('btn-bom');
+                
+                if (activePlayer === myName && gameState.players[myName].lives > 0) {
+                    document.getElementById('turn-status').innerText = "SIRA SİZDE! Karar Verin!";
+                    btnNum.disabled = false;
+                    btnBom.disabled = false;
+                } else {
+                    document.getElementById('turn-status').innerText = `Sıra ${activePlayer} adlı oyuncuda...`;
+                    btnNum.disabled = true;
+                    btnBom.disabled = true;
+                }
+
+                startMainTimerLoop();
+            } 
+            else if (gameState.status === "gameover") {
+                document.getElementById('game-screen').style.display = 'none';
+                document.getElementById('gameover-screen').style.display = 'block';
+                document.getElementById('winner-text').innerText = gameState.winnerText;
+                stopMainTimerLoop();
+                
+                let fGrid = document.getElementById('final-scores');
+                fGrid.innerHTML = "";
+                let sortedP = Object.keys(gameState.players).sort((a,b) => gameState.players[b].score - gameState.players[a].score);
+                
+                sortedP.forEach((p, index) => {
+                    let d = gameState.players[p];
+                    fGrid.innerHTML += `<div class="player-card"><b>${index+1}. ${p}</b><br>${d.score} Puan<br>Kalan Can: ${d.lives}</div>`;
+                });
+            }
+        }
+
+        function startRound() {
+            let pNames = Object.keys(gameState.players);
+            let pData = gameState.players;
+            for (let p in pData) {
+                pData[p].lives = 3;
+                pData[p].score = 0;
+            }
+
+            roomRef.update({
+                status: "playing",
+                turnOrder: pNames,
+                currentTurnIndex: 0,
+                currentNumber: 1,
+                lastReport: "Oyun başladı! İlk sayımız 1.",
+                endTime: Date.now() + (11 * 1000), 
+                players: pData
+            });
+        }
+
+        function getNextActivePlayerIndex(currentIndex) {
+            let order = gameState.turnOrder;
+            let players = gameState.players;
+            let nextIdx = currentIndex;
+            
+            for (let i = 0; i < order.length; i++) {
+                nextIdx = (nextIdx + 1) % order.length;
+                let pName = order[nextIdx];
+                if (players[pName] && players[pName].lives > 0) {
+                    return nextIdx;
+                }
+            }
+            return currentIndex;
+        }
+
+        function submitChoice(actionType) {
+            let activePlayer = gameState.turnOrder[gameState.currentTurnIndex];
+            if (activePlayer !== myName || gameState.status !== "playing") return;
+
+            document.getElementById('btn-number').disabled = true;
+            document.getElementById('btn-bom').disabled = true;
+
+            let num = gameState.currentNumber;
+            let isTrueBom = checkIsBom(num);
+            
+            let reportMsg = "";
+            let nextNumber = num + 1; // Sayı her halükarda artarak devam edecek
+            
+            let pData = gameState.players;
+
+            if (actionType === 'BOM') {
+                if (isTrueBom) {
+                    pData[myName].score += 20;
+                    reportMsg = `🔥 HARİKA! ${myName} BOM dedi! Sıradaki sayı: ${nextNumber}`;
+                } else {
+                    pData[myName].lives -= 1;
+                    reportMsg = `💥 HATA! ${num} Bom değildi! ${myName} can kaybetti. Sıradaki sayı: ${nextNumber}`;
+                }
+            } else if (actionType === 'NUMBER') {
+                if (!isTrueBom) {
+                    pData[myName].score += 10;
+                    reportMsg = `✔️ Doğru. Sıradaki sayı: ${nextNumber}`;
+                } else {
+                    pData[myName].lives -= 1;
+                    reportMsg = `💥 HATA! ${num} BOM olmalıydı! ${myName} can kaybetti. Sıradaki sayı: ${nextNumber}`;
+                }
+            }
+
+            processTurnEnd(pData, nextNumber, reportMsg);
+        }
+
+        function processTurnEnd(pDataObj, nextNum, reportMsg) {
+            let aliveCount = 0;
+            let possibleWinner = "";
+            let order = gameState.turnOrder;
+
+            order.forEach(p => {
+                if (pDataObj[p] && pDataObj[p].lives > 0) {
+                    aliveCount++;
+                    possibleWinner = p;
+                }
+            });
+
+            if (aliveCount <= 1) {
+                let winMsg = aliveCount === 1 ? `ŞAMPİYON: ${possibleWinner}!` : "Herkes elendi, oyun berabere!";
+                roomRef.update({
+                    status: "gameover",
+                    players: pDataObj,
+                    winnerText: winMsg,
+                    lastReport: reportMsg
+                });
+            } else {
+                let nextIndex = getNextActivePlayerIndex(gameState.currentTurnIndex);
+                roomRef.update({
+                    players: pDataObj,
+                    currentNumber: nextNum, // Sayı artarak aktarılıyor
+                    currentTurnIndex: nextIndex,
+                    lastReport: reportMsg,
+                    endTime: Date.now() + (11 * 1000) 
+                });
+            }
+        }
+
+        function startMainTimerLoop() {
+            if (timerInterval) clearInterval(timerInterval);
+            
+            timerInterval = setInterval(() => {
+                if (gameState.status !== "playing") { clearInterval(timerInterval); return; }
+
+                let remaining = Math.floor((gameState.endTime - Date.now()) / 1000);
+                if (remaining <= 0) {
+                    remaining = 0;
+                    
+                    if (myName === gameState.host) {
+                        let activePlayer = gameState.turnOrder[gameState.currentTurnIndex];
+                        let pData = gameState.players;
+                        let nextNumber = gameState.currentNumber + 1; // Süre dolduğunda da sayı artarak devam eder
+                        
+                        pData[activePlayer].lives -= 1;
+                        let msg = `⏰ ZAMAN DOLDU! ${activePlayer} karar veremedi. Sıradaki sayı: ${nextNumber}`;
+                        
+                        processTurnEnd(pData, nextNumber, msg); 
+                    }
+                }
+                document.getElementById('timer').innerText = remaining;
+            }, 500);
+        }
+
+        function stopMainTimerLoop() {
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        }
+
+        function resetWholeGame() {
+            let freshPlayers = {};
+            for (let p in gameState.players) {
+                freshPlayers[p] = { lives: 3, score: 0 };
+            }
+            roomRef.update({
+                status: "waiting",
+                players: freshPlayers,
+                currentNumber: 1,
+                lastReport: "",
+                turnOrder: [],
+                currentTurnIndex: 0
+            });
+        }
+    </script>
+</body>
+</html>
